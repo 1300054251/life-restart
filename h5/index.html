@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>人生重开模拟器</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { 
+      height: 100%; 
+      overflow: hidden;
+      touch-action: pan-y;
+    }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+      min-height: 100%;
+      min-height: 100dvh;
+    }
+    .card { 
+      background: rgba(255,255,255,0.08); 
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    .stat-bar { 
+      height: 6px; 
+      background: rgba(255,255,255,0.15);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .stat-fill { 
+      height: 100%; 
+      border-radius: 3px;
+      transition: width 0.5s ease;
+    }
+    .event-card {
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(-20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .talent-glow {
+      animation: glow 2s ease-in-out infinite alternate;
+    }
+    @keyframes glow {
+      from { box-shadow: 0 0 5px rgba(255,215,0,0.4); }
+      to { box-shadow: 0 0 20px rgba(255,215,0,0.7); }
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      transition: all 0.2s;
+    }
+    .btn-primary:active { transform: scale(0.97); }
+    .fade-in { animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .rarity-common { color: #9ca3af; }
+    .rarity-rare { color: #60a5fa; }
+    .rarity-epic { color: #a78bfa; }
+    .rarity-legendary { color: #fbbf24; text-shadow: 0 0 8px rgba(251,191,36,0.5); }
+    
+    /* 主容器 - 全屏 */
+    #app {
+      height: 100vh;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    /* 各屏幕 */
+    .screen {
+      display: none;
+      flex-direction: column;
+      height: 100%;
+    }
+    .screen.active {
+      display: flex;
+    }
+    
+    /* 滚动区域 */
+    .scroll-area {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+    
+    /* 固定底部 */
+    .fixed-bottom {
+      flex-shrink: 0;
+    }
+    
+    /* 成就弹出 */
+    .achievement-popup {
+      animation: achievementPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes achievementPop {
+      0% { transform: scale(0) rotate(-10deg); opacity: 0; }
+      50% { transform: scale(1.1) rotate(3deg); }
+      100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    }
+    
+    /* 粒子 */
+    .particles {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 0;
+    }
+    .particle {
+      position: absolute;
+      width: 3px;
+      height: 3px;
+      background: rgba(255,255,255,0.25);
+      border-radius: 50%;
+      animation: float 20s infinite;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { transform: translateY(-100vh) rotate(720deg); opacity: 0; }
+    }
+    
+    /* 滚动条 */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+  </style>
+</head>
+<body class="text-white">
+  <!-- 粒子背景 -->
+  <div class="particles" id="particles"></div>
+  
+  <div id="app" class="max-w-md mx-auto relative z-10">
+    
+    <!-- 开始界面 -->
+    <div id="startScreen" class="screen active">
+      <div class="flex-1 flex flex-col items-center justify-center p-5">
+        <div class="text-5xl mb-3">🌌</div>
+        <h1 class="text-2xl font-bold mb-1 text-center bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">人生重开模拟器</h1>
+        <p class="text-gray-400 mb-6 text-center text-sm">如果你能重来一次，你的人生会怎样？</p>
+        
+        <div class="space-y-2 w-full max-w-xs">
+          <button onclick="startGame()" class="btn-primary w-full py-3 rounded-xl font-bold">🚀 开始新人生</button>
+          <button onclick="showHistory()" class="w-full py-2.5 bg-white/10 rounded-xl text-sm">📜 人生记录</button>
+          <button onclick="showAchievements()" class="w-full py-2.5 bg-white/10 rounded-xl text-sm">🏆 成就图鉴</button>
+        </div>
+        
+        <p class="text-gray-500 text-xs mt-6">已有 <span id="playCount">1,234,567</span> 人重开人生</p>
+      </div>
+    </div>
+
+    <!-- 属性分配界面 -->
+    <div id="allocateScreen" class="screen">
+      <div class="p-4 text-center border-b border-white/10">
+        <h2 class="text-lg font-bold">分配初始属性</h2>
+        <p class="text-gray-400 text-sm">剩余: <span id="remainingPoints" class="text-yellow-400 font-bold">20</span> 点</p>
+      </div>
+      
+      <div class="scroll-area p-3">
+        <div class="space-y-2">
+          <!-- 颜值 -->
+          <div class="card rounded-xl p-3">
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-sm">😊 颜值</span>
+              <span id="appearanceValue" class="font-bold text-pink-400">5</span>
+            </div>
+            <div class="stat-bar">
+              <div id="appearanceBar" class="stat-fill bg-gradient-to-r from-pink-400 to-pink-600" style="width: 50%"></div>
+            </div>
+            <div class="flex justify-center gap-6 mt-2">
+              <button onclick="adjustStat('appearance', -1)" class="px-5 py-1.5 bg-white/10 rounded-lg text-sm active:bg-white/20">−</button>
+              <button onclick="adjustStat('appearance', 1)" class="px-5 py-1.5 bg-white/10 rounded-lg text-sm active:bg-white/20">+</button>
+            </div>
+          </div>
+          
+          <!-- 智力 -->
+          <div class="card rounded-xl p-3">
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-sm">🧠 智力</span>
+              <span id="intelligenceValue" class="font-bold text-blue-400">5</span>
+            </div>
+            <div class="stat-bar">
+              <div id="intelligenceBar" class="stat-fill bg-gradient-to-r from-blue-400 to-blue-600" style="width: 50%"></div>
+            </div>
+            <div class="flex justify-center gap-6 mt-2">
+              <button onclick="adjustStat('intelligence', -1)" class="px-5 py-1.5 bg-white/10 rounded-lg text-sm active:bg-white/20">−</button>
+              <button onclick="adjustStat('intelligence', 1)" class="px-5 py-1.5 bg-white/10 rounded-lg text-sm active:bg-white/20">+</button>
+            </div>
+          </div>
+          
+          <!-- 体质 -->
+          <div class="card rounded-xl p-3">
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-sm">💪 体质</span>
+              <span id="healthValue" class="font-bold text-green-400">5</span>
+            </div>
+            <div class="stat-bar">
+              <div id="healthBar" class="stat-fill bg-gradient-to-r from-green-400 to-green-600" style="width: 50%"></div>
+            </div>
+            <div class="flex justify-center gap-6 mt-2">
+              <button onclick="adjustStat('health', -1)" class="px-5 py-1.5 bg-white/10 rounded-lg text-sm active:bg-white/20">−</button>
+              <button onclick="adjustStat('health', 1)" class="px-5 py-1.5 bg-white/10 rounded-lg text-sm active:bg-white/20">+</button>
+            </div>
+          </div>
+          
+          <!-- 家境 -->
+          <div class="card rounded-xl p-3">
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-sm">💰 家境</span>
+              <span id="wealthValue" class="font-bold text-yellow-400">5</span>
+            </div>
+            <div class="stat-bar">
+              <div id="wealthBar" class="stat-fill bg-gradient-to-r from-yellow-400 to-yellow-600" style="width: 50%"></div>
+            </div>
+            <div class="flex justify-center gap-6 mt-2">
+              <button onclick="adjustStat('wealth', -1)" class="px-5 py-1.5 bg-white/10 rounded-lg text-sm active:bg-white/20">−</button>
+              <button onclick="adjustStat('wealth', 1)" class="px-5 py-1.5 bg-white/10 rounded-lg text-sm active:bg-white/20">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="fixed-bottom p-3 space-y-2 border-t border-white/10">
+        <button onclick="randomAllocate()" class="w-full py-2.5 bg-white/10 rounded-xl text-sm">🎲 随机分配</button>
+        <button onclick="selectTalents()" class="btn-primary w-full py-3 rounded-xl font-bold">确认并选择天赋 →</button>
+      </div>
+    </div>
+
+    <!-- 天赋选择界面 -->
+    <div id="talentScreen" class="screen">
+      <div class="p-4 text-center border-b border-white/10">
+        <h2 class="text-lg font-bold">选择天赋</h2>
+        <p class="text-gray-400 text-sm">已选: <span id="selectedCount" class="text-yellow-400 font-bold">0</span>/3</p>
+      </div>
+      
+      <div id="talentPool" class="scroll-area p-3 space-y-2">
+        <!-- 天赋卡片动态生成 -->
+      </div>
+      
+      <div class="fixed-bottom p-3 border-t border-white/10">
+        <button id="startLifeBtn" onclick="beginLife()" class="btn-primary w-full py-3 rounded-xl font-bold" disabled>
+          开始人生 🌟
+        </button>
+      </div>
+    </div>
+
+    <!-- 人生进行界面 -->
+    <div id="lifeScreen" class="screen">
+      <!-- 状态栏 -->
+      <div class="card m-3 mb-0 rounded-xl p-3">
+        <div class="flex justify-between items-center mb-2">
+          <span id="currentAge" class="text-xl font-bold">0岁</span>
+          <span id="lifeStage" class="text-purple-400 text-sm">婴儿期</span>
+        </div>
+        <div class="grid grid-cols-4 gap-1.5 text-center text-xs">
+          <div class="card rounded-lg p-1.5">
+            <div class="text-gray-400">颜值</div>
+            <div id="statAppearance" class="font-bold text-pink-400">5</div>
+          </div>
+          <div class="card rounded-lg p-1.5">
+            <div class="text-gray-400">智力</div>
+            <div id="statIntelligence" class="font-bold text-blue-400">5</div>
+          </div>
+          <div class="card rounded-lg p-1.5">
+            <div class="text-gray-400">体质</div>
+            <div id="statHealth" class="font-bold text-green-400">5</div>
+          </div>
+          <div class="card rounded-lg p-1.5">
+            <div class="text-gray-400">家境</div>
+            <div id="statWealth" class="font-bold text-yellow-400">5</div>
+          </div>
+        </div>
+        <div id="activeTalents" class="mt-2 flex flex-wrap gap-1"></div>
+      </div>
+      
+      <!-- 事件日志 - 滚动区域 -->
+      <div id="eventLog" class="scroll-area p-3 space-y-1.5"></div>
+      
+      <!-- 操作按钮 -->
+      <div class="fixed-bottom p-3 border-t border-white/10">
+        <button id="nextYearBtn" onclick="nextYear()" class="btn-primary w-full py-3 rounded-xl font-bold mb-2">
+          ⏩ 继续人生
+        </button>
+        <div class="flex gap-2">
+          <button onclick="autoPlay()" id="autoPlayBtn" class="flex-1 py-2 bg-white/10 rounded-lg text-xs">▶️ 自动</button>
+          <button onclick="saveAndQuit()" class="flex-1 py-2 bg-white/10 rounded-lg text-xs">💾 退出</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 结局界面 -->
+    <div id="endScreen" class="screen">
+      <div class="scroll-area p-4">
+        <div class="text-center mb-4">
+          <div class="text-5xl mb-2" id="endEmoji">⚰️</div>
+          <h2 id="endTitle" class="text-2xl font-bold bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent">人生结束</h2>
+          <p id="endSubtitle" class="text-gray-400 text-sm">享年 0 岁</p>
+        </div>
+        
+        <div class="card rounded-xl p-4 mb-3">
+          <div class="grid grid-cols-4 gap-2 text-center mb-3">
+            <div>
+              <div class="text-xl">😊</div>
+              <div id="endAppearance" class="font-bold text-pink-400">5</div>
+              <div class="text-xs text-gray-400">颜值</div>
+            </div>
+            <div>
+              <div class="text-xl">🧠</div>
+              <div id="endIntelligence" class="font-bold text-blue-400">5</div>
+              <div class="text-xs text-gray-400">智力</div>
+            </div>
+            <div>
+              <div class="text-xl">💪</div>
+              <div id="endHealth" class="font-bold text-green-400">5</div>
+              <div class="text-xs text-gray-400">体质</div>
+            </div>
+            <div>
+              <div class="text-xl">💰</div>
+              <div id="endWealth" class="font-bold text-yellow-400">5</div>
+              <div class="text-xs text-gray-400">家境</div>
+            </div>
+          </div>
+          
+          <div class="border-t border-white/10 pt-3 text-center">
+            <p class="text-lg" id="endingName">「平凡人生」</p>
+            <p class="text-xs text-gray-400" id="endingDesc">一个普通的人生</p>
+          </div>
+          
+          <div id="unlockedAchievements" class="border-t border-white/10 pt-3 mt-3 hidden">
+            <p class="text-center text-xs text-gray-400 mb-2">🏆 本次解锁成就</p>
+            <div id="unlockedList" class="space-y-1.5"></div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="fixed-bottom p-3 space-y-2 border-t border-white/10">
+        <button onclick="shareResult()" class="w-full py-2.5 bg-gradient-to-r from-green-500 to-teal-500 rounded-xl text-sm font-medium">📤 分享结局</button>
+        <button onclick="restartGame()" class="btn-primary w-full py-3 rounded-xl font-bold">🔄 重新开始</button>
+      </div>
+    </div>
+
+    <!-- 历史记录界面 -->
+    <div id="historyScreen" class="screen">
+      <div class="p-4 border-b border-white/10 flex items-center justify-between">
+        <h2 class="text-lg font-bold">📜 人生记录</h2>
+        <button onclick="showScreen('startScreen')" class="text-gray-400 text-sm">✕ 关闭</button>
+      </div>
+      <div id="historyList" class="scroll-area p-3 space-y-2"></div>
+      <div class="fixed-bottom p-3 border-t border-white/10">
+        <button onclick="clearHistory()" class="w-full py-2.5 bg-red-500/20 text-red-400 rounded-xl text-sm">🗑️ 清空记录</button>
+      </div>
+    </div>
+
+    <!-- 成就图鉴界面 -->
+    <div id="achievementScreen" class="screen">
+      <div class="p-4 border-b border-white/10">
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-bold">🏆 成就图鉴</h2>
+          <button onclick="showScreen('startScreen')" class="text-gray-400 text-sm">✕ 关闭</button>
+        </div>
+        <p class="text-gray-400 text-xs mt-1">已解锁: <span id="achievementCount">0</span>/<span id="achievementTotal">0</span></p>
+      </div>
+      <div id="achievementList" class="scroll-area p-3 grid grid-cols-2 gap-2 content-start"></div>
+    </div>
+
+    <!-- 成就弹出提示 -->
+    <div id="achievementToast" class="hidden fixed top-4 left-1/2 -translate-x-1/2 card rounded-xl p-3 z-50 achievement-popup">
+      <div class="flex items-center gap-2">
+        <div class="text-2xl" id="toastIcon">🏆</div>
+        <div>
+          <p class="text-xs text-gray-400">成就解锁</p>
+          <p class="font-bold text-sm" id="toastTitle">成就名称</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // ========== 游戏数据 ==========
+    
+    const TALENTS = [
+      { id: 't1', name: '普通人', desc: '没有特殊天赋', rarity: 'common', effects: {} },
+      { id: 't2', name: '早熟', desc: '智力成长+20%', rarity: 'common', effects: { intelligenceGrowth: 1.2 } },
+      { id: 't3', name: '健康宝宝', desc: '体质成长+20%', rarity: 'common', effects: { healthGrowth: 1.2 } },
+      { id: 't4', name: '美人胚子', desc: '颜值成长+20%', rarity: 'common', effects: { appearanceGrowth: 1.2 } },
+      { id: 't5', name: '小康之家', desc: '家境成长+20%', rarity: 'common', effects: { wealthGrowth: 1.2 } },
+      { id: 't6', name: '学霸', desc: '学习事件成功率+50%', rarity: 'rare', effects: { studyBonus: 1.5 } },
+      { id: 't7', name: '社交达人', desc: '人际关系更容易成功', rarity: 'rare', effects: { socialBonus: 1.3 } },
+      { id: 't8', name: '运动天赋', desc: '体育活动成功率+50%', rarity: 'rare', effects: { sportsBonus: 1.5 } },
+      { id: 't9', name: '创业基因', desc: '商业活动收益+30%', rarity: 'rare', effects: { businessBonus: 1.3 } },
+      { id: 't10', name: '幸运儿', desc: '好事发生概率+20%', rarity: 'rare', effects: { luckBonus: 1.2 } },
+      { id: 't11', name: '铁饭碗', desc: '失业概率降低', rarity: 'rare', effects: { jobStability: 1.5 } },
+      { id: 't12', name: '天生丽质', desc: '颜值上限+2，社交+30%', rarity: 'epic', effects: { appearanceMax: 2, socialBonus: 1.3 } },
+      { id: 't13', name: '天才', desc: '智力上限+2，学习效率+30%', rarity: 'epic', effects: { intelligenceMax: 2, studyBonus: 1.3 } },
+      { id: 't14', name: '不死之身', desc: '体质上限+2，意外死亡-50%', rarity: 'epic', effects: { healthMax: 2, accidentRate: 0.5 } },
+      { id: 't15', name: '富贵命', desc: '家境上限+2，收入+30%', rarity: 'epic', effects: { wealthMax: 2, incomeBonus: 1.3 } },
+      { id: 't16', name: '魅力四射', desc: '桃花运爆棚', rarity: 'epic', effects: { romanceBonus: 2 } },
+      { id: 't17', name: '命运之子', desc: '所有属性上限+1', rarity: 'legendary', effects: { allMax: 1, luckBonus: 2 } },
+      { id: 't18', name: '白手起家', desc: '家境为0时，财富增长+100%', rarity: 'legendary', effects: { poorBonus: 2 } },
+      { id: 't19', name: '含着金钥匙', desc: '初始家境+3', rarity: 'legendary', effects: { wealthBonus: 3, spoiledChance: 0.3 } },
+      { id: 't20', name: '重生者', desc: '学习效率翻倍', rarity: 'legendary', effects: { studyBonus: 2, intelligenceGrowth: 1.5 } },
+    ];
+
+    const LIFE_STAGES = [
+      { name: '婴儿期', range: [0, 2], emoji: '👶' },
+      { name: '幼儿期', range: [3, 5], emoji: '🧒' },
+      { name: '童年', range: [6, 11], emoji: '👦' },
+      { name: '少年', range: [12, 17], emoji: '🧑' },
+      { name: '青年', range: [18, 35], emoji: '👨' },
+      { name: '中年', range: [36, 55], emoji: '🧔' },
+      { name: '老年', range: [56, 75], emoji: '👴' },
+      { name: '暮年', range: [76, 100], emoji: '🦳' },
+    ];
+
+    const EVENTS = {
+      baby: [
+        { age: 0, text: '🎉 你出生了！', effects: {} },
+        { condition: { health: [8, 10] }, text: '你出生时白白胖胖，医生都夸你健康。', effects: {} },
+        { condition: { health: [1, 3] }, text: '你出生时体弱多病，在保温箱住了好几天。', effects: { health: -1 } },
+        { condition: { wealth: [8, 10] }, text: '你家境优渥，住在高档小区。', effects: {} },
+        { condition: { wealth: [1, 2] }, text: '你家境贫寒，从小就很懂事。', effects: { intelligence: 1 } },
+        { age: 1, text: '你学会了走路。', effects: { health: 1 } },
+        { age: 2, text: '你开始咿呀学语。', effects: { intelligence: 1 } },
+        { random: 0.2, text: '你学会了自己吃饭。', effects: {} },
+        { random: 0.1, text: '你第一次叫了"爸爸妈妈"。', effects: {} },
+      ],
+      childhood: [
+        { age: 6, text: '📚 你上小学了！', effects: {} },
+        { condition: { intelligence: [8, 10] }, text: '你在班里成绩名列前茅，老师经常表扬你。', effects: { intelligence: 1 } },
+        { condition: { intelligence: [1, 3] }, text: '你学习很吃力，经常被叫家长。', effects: { intelligence: -1 } },
+        { condition: { appearance: [7, 10] }, text: '你长得很可爱，同学们都喜欢和你玩。', effects: {} },
+        { condition: { health: [8, 10] }, text: '🏃 你在运动会上获得了第一名！', effects: { health: 1 } },
+        { condition: { health: [1, 3] }, text: '你经常生病请假，功课落下不少。', effects: { intelligence: -1 } },
+        { random: 0.3, text: '你学会了骑自行车。', effects: { health: 1 } },
+        { random: 0.25, text: '你养了一只小宠物。', effects: {} },
+        { random: 0.15, text: '你在学校被同学欺负了。', effects: { health: -1 } },
+        { random: 0.1, text: '你获得了三好学生奖状！', effects: { intelligence: 1 } },
+      ],
+      teenager: [
+        { age: 12, text: '🏫 你升入初中。', effects: {} },
+        { age: 15, text: '🏫 你升入高中。', effects: {} },
+        { condition: { intelligence: [8, 10] }, text: '你考入了重点高中！', effects: { intelligence: 1 } },
+        { condition: { intelligence: [1, 3] }, text: '你中考失利，进入了普通高中。', effects: {} },
+        { condition: { appearance: [7, 10] }, text: '💌 青春期的你颜值在线，收到了很多情书。', effects: {} },
+        { condition: { health: [8, 10] }, text: '🏅 你成为了校队主力！', effects: { health: 1 } },
+        { random: 0.3, text: '🎸 你学会了弹吉他。', effects: {} },
+        { random: 0.2, text: '你暗恋了一个同学，但没有表白。', effects: {} },
+        { random: 0.15, text: '💕 你的初恋开始了！虽然短暂，但很美好。', effects: {} },
+        { random: 0.1, text: '💥 你和父母大吵了一架。', effects: { intelligence: -1 } },
+        { random: 0.12, text: '🎮 你迷上了网络游戏，成绩下滑。', effects: { intelligence: -1 } },
+        { random: 0.08, text: '🏆 你获得了省级竞赛奖项！', effects: { intelligence: 1 } },
+        { age: 17, condition: { intelligence: [9, 10] }, text: '🌟 你获得了保送名校的资格！', effects: { intelligence: 1 } },
+      ],
+      youth: [
+        { age: 18, text: '🎊 你成年了！', effects: {} },
+        { condition: { intelligence: [9, 10] }, text: '🎓 你考入了清华/北大！', effects: { intelligence: 1, wealth: 1 } },
+        { condition: { intelligence: [7, 8] }, text: '🎓 你考入了985大学。', effects: { intelligence: 1 } },
+        { condition: { intelligence: [5, 6] }, text: '🎓 你考上了一本大学。', effects: {} },
+        { condition: { intelligence: [3, 4] }, text: '你高考失利，进入了一所普通学校。', effects: {} },
+        { condition: { intelligence: [1, 2] }, text: '😢 你高考落榜，决定复读或工作。', effects: {} },
+        { age: 22, condition: { intelligence: [6, 10] }, text: '🎓 你大学毕业了。', effects: {} },
+        { random: 0.35, text: '💼 你找到了一份工作。', effects: { wealth: 1 } },
+        { random: 0.2, text: '💕 你谈了一场恋爱。', effects: {} },
+        { random: 0.15, text: '💼 你跳槽到了更好的公司。', effects: { wealth: 1 } },
+        { random: 0.1, text: '🏢 你开始创业。', effects: {} },
+        { random: 0.12, text: '💍 你结婚了！', effects: {} },
+        { random: 0.08, text: '👶 你的孩子出生了！', effects: {} },
+        { random: 0.05, text: '💔 你和伴侣分手了。', effects: { health: -1 } },
+        { condition: { wealth: [8, 10] }, text: '🚗 你买了人生中第一辆车。', effects: {} },
+        { random: 0.08, text: '📚 你考取了研究生。', effects: { intelligence: 1 } },
+        { random: 0.06, text: '😰 你失业了，开始焦虑。', effects: { wealth: -1 } },
+        { random: 0.04, text: '🍀 你中了彩票小奖！', effects: { wealth: 1 } },
+      ],
+      middle: [
+        { random: 0.25, text: '📈 你在职场上步步高升。', effects: { wealth: 2 } },
+        { random: 0.15, text: '💹 你投资赚了一笔。', effects: { wealth: 2 } },
+        { random: 0.1, text: '📉 你投资亏了，损失不小。', effects: { wealth: -2 } },
+        { random: 0.15, text: '👶 你的二胎出生了。', effects: {} },
+        { random: 0.12, text: '😢 你经历了中年危机。', effects: { health: -1 } },
+        { random: 0.08, text: '💔 你和伴侣的感情出现了危机。', effects: {} },
+        { condition: { health: [1, 3] }, text: '🏥 你的身体开始出现问题。', effects: { health: -2 } },
+        { condition: { health: [7, 10] }, text: '💪 你坚持锻炼，身体状态很好。', effects: {} },
+        { random: 0.1, text: '👨‍👩‍👧 你的孩子考上了好大学。', effects: { intelligence: 1 } },
+        { random: 0.08, text: '🎁 你开始为退休做规划。', effects: {} },
+      ],
+      elder: [
+        { age: 60, text: '🎉 你退休了，开始享受晚年。', effects: {} },
+        { random: 0.25, text: '✈️ 你和老伴环游世界。', effects: {} },
+        { random: 0.2, text: '👶 你的孙子出生了。', effects: {} },
+        { condition: { health: [1, 4] }, text: '🏥 你的身体每况愈下。', effects: { health: -2 } },
+        { condition: { health: [7, 10] }, text: '💪 你的身体依然硬朗。', effects: {} },
+        { random: 0.15, text: '🧓 你在公园里跳广场舞。', effects: { health: 1 } },
+        { random: 0.05, text: '😢 你的老伴去世了。', effects: { health: -2 } },
+      ],
+      senior: [
+        { random: 0.25, text: '♟️ 你在公园里和其他老人下棋。', effects: {} },
+        { random: 0.2, text: '📖 你给孙辈们讲述年轻时的故事。', effects: {} },
+        { condition: { health: [1, 3] }, text: '🏥 你的身体已经大不如前。', effects: { health: -2 } },
+        { condition: { health: [7, 10] }, text: '💪 你依然精神矍铄。', effects: {} },
+        { random: 0.1, text: '🎂 你迎来了自己的80大寿。', effects: {} },
+        { random: 0.08, text: '🎂 你迎来了自己的90大寿。', effects: {} },
+        { random: 0.05, text: '🏆 你获得了长寿老人的称号。', effects: {} },
+        { age: 100, text: '🎊 你活到了100岁！', effects: {} },
+      ],
+    };
+
+    const ACHIEVEMENTS = [
+      { id: 'a1', name: '初来乍到', desc: '完成第一次人生', icon: '👶', rarity: 'common', condition: { type: 'first_game' } },
+      { id: 'a2', name: '短命鬼', desc: '活不过10岁', icon: '💀', rarity: 'common', condition: { type: 'age', value: 10, compare: '<' } },
+      { id: 'a3', name: '人生苦短', desc: '活不到30岁', icon: '⏰', rarity: 'common', condition: { type: 'age', value: 30, compare: '<' } },
+      { id: 'a4', name: '天妒英才', desc: '高智力但早逝', icon: '🌠', rarity: 'rare', condition: { type: 'combo', stats: { intelligence: 8 }, age: 30, compare: '<' } },
+      { id: 'a5', name: '知天命', desc: '活到50岁', icon: '🎯', rarity: 'common', condition: { type: 'age', value: 50, compare: '>=' } },
+      { id: 'a6', name: '花甲之年', desc: '活到60岁', icon: '🎋', rarity: 'common', condition: { type: 'age', value: 60, compare: '>=' } },
+      { id: 'a7', name: '古稀之年', desc: '活到70岁', icon: '👴', rarity: 'rare', condition: { type: 'age', value: 70, compare: '>=' } },
+      { id: 'a8', name: '耄耋之年', desc: '活到80岁', icon: '🦳', rarity: 'rare', condition: { type: 'age', value: 80, compare: '>=' } },
+      { id: 'a9', name: '期颐之年', desc: '活到100岁', icon: '🎂', rarity: 'epic', condition: { type: 'age', value: 100, compare: '>=' } },
+      { id: 'a10', name: '人瑞', desc: '活到105岁', icon: '🌟', rarity: 'legendary', condition: { type: 'age', value: 105, compare: '>=' } },
+      { id: 'a11', name: '颜值担当', desc: '颜值达到10', icon: '😊', rarity: 'rare', condition: { type: 'stat', stat: 'appearance', value: 10 } },
+      { id: 'a12', name: '天才', desc: '智力达到10', icon: '🧠', rarity: 'rare', condition: { type: 'stat', stat: 'intelligence', value: 10 } },
+      { id: 'a13', name: '壮如牛', desc: '体质达到10', icon: '💪', rarity: 'rare', condition: { type: 'stat', stat: 'health', value: 10 } },
+      { id: 'a14', name: '富甲一方', desc: '家境达到10', icon: '💰', rarity: 'rare', condition: { type: 'stat', stat: 'wealth', value: 10 } },
+      { id: 'a15', name: '人生赢家', desc: '所有属性≥8', icon: '👑', rarity: 'legendary', condition: { type: 'all_stats', value: 8 } },
+      { id: 'a16', name: '高富帅', desc: '颜值8+家境9+', icon: '💎', rarity: 'epic', condition: { type: 'combo', stats: { appearance: 8, wealth: 9 } } },
+      { id: 'a17', name: '白富美', desc: '颜值9+家境8+', icon: '💍', rarity: 'epic', condition: { type: 'combo', stats: { appearance: 9, wealth: 8 } } },
+      { id: 'a18', name: '学富五车', desc: '智力达到10', icon: '📚', rarity: 'epic', condition: { type: 'stat', stat: 'intelligence', value: 10 } },
+      { id: 'a19', name: '逆袭', desc: '家境1→财富8+', icon: '📈', rarity: 'epic', condition: { type: 'rise', stat: 'wealth', from: 1, to: 8 } },
+      { id: 'a20', name: '落魄', desc: '家境9→财富2-', icon: '📉', rarity: 'rare', condition: { type: 'fall', stat: 'wealth', from: 9, to: 2 } },
+      { id: 'a21', name: '悲惨人生', desc: '所有属性<3', icon: '😢', rarity: 'rare', condition: { type: 'all_stats', value: 3, compare: '<' } },
+      { id: 'a22', name: '平凡人生', desc: '所有属性4-6', icon: '😐', rarity: 'common', condition: { type: 'average' } },
+      { id: 'a23', name: '人生体验师', desc: '完成10次人生', icon: '🎮', rarity: 'common', condition: { type: 'games', value: 10 } },
+      { id: 'a24', name: '人生专家', desc: '完成50次人生', icon: '🏅', rarity: 'rare', condition: { type: 'games', value: 50 } },
+      { id: 'a25', name: '人生大师', desc: '完成100次人生', icon: '🏆', rarity: 'epic', condition: { type: 'games', value: 100 } },
+    ];
+
+    // ========== 游戏状态 ==========
+    
+    let gameState = {
+      phase: 'start',
+      age: 0,
+      stats: { appearance: 5, intelligence: 5, health: 5, wealth: 5 },
+      initialStats: { appearance: 5, intelligence: 5, health: 5, wealth: 5 },
+      maxStats: { appearance: 10, intelligence: 10, health: 10, wealth: 10 },
+      talents: [],
+      isAlive: true,
+      remainingPoints: 20,
+      autoPlaying: false,
+    };
+
+    let availableTalents = [];
+    let selectedTalents = [];
+    let unlockedAchievementsThisGame = [];
+
+    // ========== 初始化 ==========
+    
+    function init() {
+      createParticles();
+      loadPlayCount();
+    }
+
+    function createParticles() {
+      const container = document.getElementById('particles');
+      for (let i = 0; i < 15; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'particle';
+        particle.style.left = Math.random() * 100 + '%';
+        particle.style.animationDelay = Math.random() * 20 + 's';
+        container.appendChild(particle);
+      }
+    }
+
+    function loadPlayCount() {
+      const count = localStorage.getItem('lifeRestart_playCount') || 1234567;
+      document.getElementById('playCount').textContent = Number(count).toLocaleString();
+    }
+
+    // ========== 游戏流程 ==========
+    
+    function startGame() {
+      gameState = {
+        phase: 'allocate',
+        age: 0,
+        stats: { appearance: 5, intelligence: 5, health: 5, wealth: 5 },
+        initialStats: { appearance: 5, intelligence: 5, health: 5, wealth: 5 },
+        maxStats: { appearance: 10, intelligence: 10, health: 10, wealth: 10 },
+        talents: [],
+        isAlive: true,
+        remainingPoints: 20,
+        autoPlaying: false,
+      };
+      
+      unlockedAchievementsThisGame = [];
+      showScreen('allocateScreen');
+      updateStatsDisplay();
+    }
+
+    function adjustStat(stat, delta) {
+      const newValue = gameState.stats[stat] + delta;
+      const newRemaining = gameState.remainingPoints - delta;
+      
+      if (newValue >= 1 && newValue <= 10 && newRemaining >= 0) {
+        gameState.stats[stat] = newValue;
+        gameState.remainingPoints = newRemaining;
+        updateStatsDisplay();
+      }
+    }
+
+    function randomAllocate() {
+      const stats = ['appearance', 'intelligence', 'health', 'wealth'];
+      let points = 20;
+      stats.forEach(s => gameState.stats[s] = 1);
+      points -= 4;
+      
+      while (points > 0) {
+        const stat = stats[Math.floor(Math.random() * stats.length)];
+        if (gameState.stats[stat] < 10) {
+          gameState.stats[stat]++;
+          points--;
+        }
+      }
+      gameState.remainingPoints = 0;
+      updateStatsDisplay();
+    }
+
+    function updateStatsDisplay() {
+      ['appearance', 'intelligence', 'health', 'wealth'].forEach(stat => {
+        const value = gameState.stats[stat];
+        document.getElementById(`${stat}Value`).textContent = value;
+        document.getElementById(`${stat}Bar`).style.width = `${value * 10}%`;
+      });
+      document.getElementById('remainingPoints').textContent = gameState.remainingPoints;
+    }
+
+    function selectTalents() {
+      gameState.initialStats = { ...gameState.stats };
+      gameState.phase = 'talent';
+      availableTalents = [...TALENTS].sort(() => Math.random() - 0.5).slice(0, 10);
+      selectedTalents = [];
+      renderTalentPool();
+      showScreen('talentScreen');
+    }
+
+    function renderTalentPool() {
+      const pool = document.getElementById('talentPool');
+      pool.innerHTML = availableTalents.map(t => `
+        <div class="card rounded-lg p-2.5 cursor-pointer transition-all ${selectedTalents.includes(t.id) ? 'ring-2 ring-yellow-400 talent-glow' : 'active:bg-white/10'}"
+             onclick="toggleTalent('${t.id}')">
+          <div class="flex justify-between items-center">
+            <span class="font-medium text-sm rarity-${t.rarity}">${t.name}</span>
+            <span class="text-xs px-1.5 py-0.5 rounded ${getRarityBg(t.rarity)}">${getRarityText(t.rarity)}</span>
+          </div>
+          <p class="text-xs text-gray-400 mt-0.5">${t.desc}</p>
+        </div>
+      `).join('');
+      
+      document.getElementById('selectedCount').textContent = selectedTalents.length;
+      document.getElementById('startLifeBtn').disabled = selectedTalents.length !== 3;
+    }
+
+    function toggleTalent(id) {
+      if (selectedTalents.includes(id)) {
+        selectedTalents = selectedTalents.filter(t => t !== id);
+      } else if (selectedTalents.length < 3) {
+        selectedTalents.push(id);
+      }
+      renderTalentPool();
+    }
+
+    function getRarityBg(rarity) {
+      const bgs = { common: 'bg-gray-600', rare: 'bg-blue-600', epic: 'bg-purple-600', legendary: 'bg-yellow-600' };
+      return bgs[rarity] || 'bg-gray-600';
+    }
+
+    function getRarityText(rarity) {
+      const texts = { common: '普通', rare: '稀有', epic: '史诗', legendary: '传说' };
+      return texts[rarity] || '普通';
+    }
+
+    function beginLife() {
+      gameState.phase = 'life';
+      gameState.talents = availableTalents.filter(t => selectedTalents.includes(t.id));
+      applyTalentEffects();
+      
+      document.getElementById('eventLog').innerHTML = '';
+      updateActiveTalentsDisplay();
+      showScreen('lifeScreen');
+      
+      addEvent('🌟 你的人生开始了！', 'special');
+      setTimeout(() => nextYear(), 300);
+    }
+
+    function applyTalentEffects() {
+      gameState.talents.forEach(t => {
+        if (t.effects.appearanceMax) gameState.maxStats.appearance += t.effects.appearanceMax;
+        if (t.effects.intelligenceMax) gameState.maxStats.intelligence += t.effects.intelligenceMax;
+        if (t.effects.healthMax) gameState.maxStats.health += t.effects.healthMax;
+        if (t.effects.allMax) {
+          Object.keys(gameState.maxStats).forEach(k => gameState.maxStats[k] += t.effects.allMax);
+        }
+        if (t.effects.wealthBonus) {
+          gameState.stats.wealth = Math.min(gameState.maxStats.wealth, gameState.stats.wealth + t.effects.wealthBonus);
+        }
+      });
+    }
+
+    function updateActiveTalentsDisplay() {
+      const container = document.getElementById('activeTalents');
+      container.innerHTML = gameState.talents.map(t => 
+        `<span class="text-xs px-1.5 py-0.5 rounded bg-white/10 rarity-${t.rarity}">${t.name}</span>`
+      ).join('');
+    }
+
+    // ========== 游戏进行 ==========
+    
+    function nextYear() {
+      if (!gameState.isAlive) return;
+      
+      gameState.age++;
+      
+      if (shouldDie()) {
+        endLife();
+        return;
+      }
+      
+      const stageEvents = getStageEvents();
+      triggerEvents(stageEvents);
+      updateLifeDisplay();
+      
+      if (gameState.age >= 100) endLife();
+    }
+
+    function getStageEvents() {
+      const age = gameState.age;
+      if (age <= 5) return EVENTS.baby;
+      if (age <= 11) return EVENTS.childhood;
+      if (age <= 17) return EVENTS.teenager;
+      if (age <= 35) return EVENTS.youth;
+      if (age <= 55) return EVENTS.middle;
+      if (age <= 75) return EVENTS.elder;
+      return EVENTS.senior;
+    }
+
+    function triggerEvents(events) {
+      const triggered = [];
+      
+      events.filter(e => e.age === gameState.age).forEach(e => triggered.push(e));
+      
+      const conditionEvents = events.filter(e => e.condition && !e.age && !e.random);
+      for (const e of conditionEvents) {
+        if (checkCondition(e.condition) && Math.random() < 0.3) {
+          triggered.push(e);
+          break;
+        }
+      }
+      
+      const randomEvents = events.filter(e => e.random);
+      let randomCount = 0;
+      for (const e of randomEvents) {
+        if (Math.random() < e.random && randomCount < 2) {
+          triggered.push(e);
+          randomCount++;
+        }
+      }
+      
+      triggered.forEach(e => {
+        let effectText = '';
+        for (const [key, value] of Object.entries(e.effects)) {
+          if (gameState.stats[key] !== undefined) {
+            gameState.stats[key] = Math.max(0, Math.min(gameState.maxStats[key], gameState.stats[key] + value));
+            effectText += value > 0 ? `📈${getStatName(key)}+${value} ` : `📉${getStatName(key)}${value} `;
+          }
+        }
+        addEvent(e.text, effectText ? 'has-effect' : '', effectText);
+      });
+    }
+
+    function getStatName(stat) {
+      const names = { appearance: '颜值', intelligence: '智力', health: '体质', wealth: '家境' };
+      return names[stat] || stat;
+    }
+
+    function checkCondition(condition) {
+      for (const [key, range] of Object.entries(condition)) {
+        const value = key === 'age' ? gameState.age : gameState.stats[key];
+        if (value < range[0] || value > range[1]) return false;
+      }
+      return true;
+    }
+
+    function shouldDie() {
+      if (gameState.stats.health <= 0) return true;
+      let deathChance = 0;
+      if (gameState.age > 60) deathChance += (gameState.age - 60) * 0.01;
+      if (gameState.stats.health <= 2) deathChance += 0.05;
+      return Math.random() < deathChance;
+    }
+
+    function addEvent(text, className = '', effectText = '') {
+      const log = document.getElementById('eventLog');
+      const div = document.createElement('div');
+      div.className = `event-card card rounded-lg p-2 text-xs ${className}`;
+      
+      const stage = LIFE_STAGES.find(s => gameState.age >= s.range[0] && gameState.age <= s.range[1]);
+      
+      div.innerHTML = `
+        <div class="flex items-start gap-1.5">
+          <span>${stage ? stage.emoji : '📝'}</span>
+          <div class="flex-1">
+            <span class="text-gray-400">${gameState.age}岁:</span> ${text}
+            ${effectText ? `<div class="text-xs mt-0.5 ${effectText.includes('📈') ? 'text-green-400' : 'text-red-400'}">${effectText}</div>` : ''}
+          </div>
+        </div>
+      `;
+      
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function updateLifeDisplay() {
+      document.getElementById('currentAge').textContent = `${gameState.age}岁`;
+      const stage = LIFE_STAGES.find(s => gameState.age >= s.range[0] && gameState.age <= s.range[1]);
+      document.getElementById('lifeStage').textContent = stage ? `${stage.emoji} ${stage.name}` : '人生';
+      
+      ['appearance', 'intelligence', 'health', 'wealth'].forEach(stat => {
+        document.getElementById(`stat${stat.charAt(0).toUpperCase() + stat.slice(1)}`).textContent = gameState.stats[stat];
+      });
+    }
+
+    function autoPlay() {
+      const btn = document.getElementById('autoPlayBtn');
+      
+      if (gameState.autoPlaying) {
+        gameState.autoPlaying = false;
+        btn.textContent = '▶️ 自动';
+        return;
+      }
+      
+      gameState.autoPlaying = true;
+      btn.textContent = '⏸️ 暂停';
+      
+      const autoStep = () => {
+        if (!gameState.autoPlaying || !gameState.isAlive) {
+          gameState.autoPlaying = false;
+          btn.textContent = '▶️ 自动';
+          return;
+        }
+        nextYear();
+        if (gameState.isAlive) setTimeout(autoStep, 200);
+      };
+      autoStep();
+    }
+
+    // ========== 结局 ==========
+    
+    function endLife() {
+      gameState.isAlive = false;
+      gameState.autoPlaying = false;
+      
+      const count = parseInt(localStorage.getItem('lifeRestart_playCount') || '1234567') + 1;
+      localStorage.setItem('lifeRestart_playCount', count);
+      document.getElementById('playCount').textContent = count.toLocaleString();
+      
+      const ending = calculateEnding();
+      const unlocked = checkAchievements();
+      unlockedAchievementsThisGame = unlocked;
+      
+      document.getElementById('endEmoji').textContent = ending.emoji;
+      document.getElementById('endTitle').textContent = ending.name;
+      document.getElementById('endSubtitle').textContent = `享年 ${gameState.age} 岁`;
+      
+      document.getElementById('endAppearance').textContent = gameState.stats.appearance;
+      document.getElementById('endIntelligence').textContent = gameState.stats.intelligence;
+      document.getElementById('endHealth').textContent = gameState.stats.health;
+      document.getElementById('endWealth').textContent = gameState.stats.wealth;
+      
+      document.getElementById('endingName').textContent = `「${ending.name}」`;
+      document.getElementById('endingName').className = `text-lg rarity-${ending.rarity}`;
+      document.getElementById('endingDesc').textContent = ending.desc;
+      
+      if (unlocked.length > 0) {
+        document.getElementById('unlockedAchievements').classList.remove('hidden');
+        document.getElementById('unlockedList').innerHTML = unlocked.map(a => `
+          <div class="card rounded-lg p-2 flex items-center gap-2">
+            <span class="text-lg">${a.icon}</span>
+            <div>
+              <p class="font-medium text-sm rarity-${a.rarity}">${a.name}</p>
+              <p class="text-xs text-gray-400">${a.desc}</p>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        document.getElementById('unlockedAchievements').classList.add('hidden');
+      }
+      
+      saveHistory(ending);
+      showScreen('endScreen');
+    }
+
+    function calculateEnding() {
+      const stats = gameState.stats;
+      const age = gameState.age;
+      
+      if (stats.appearance >= 8 && stats.intelligence >= 8 && stats.health >= 8 && stats.wealth >= 8) {
+        return { name: '人生赢家', desc: '集美貌、智慧、健康、财富于一身', emoji: '👑', rarity: 'legendary' };
+      }
+      if (age >= 100) return { name: '百岁老人', desc: '跨越世纪的人生', emoji: '🎂', rarity: 'epic' };
+      if (stats.appearance >= 9 && stats.wealth >= 9) return { name: '高富帅/白富美', desc: '颜值与财富并存', emoji: '💎', rarity: 'epic' };
+      if (stats.intelligence >= 10) return { name: '学富五车', desc: '知识的化身', emoji: '📚', rarity: 'epic' };
+      if (stats.health >= 10) return { name: '百病不侵', desc: '强健的体魄', emoji: '💪', rarity: 'epic' };
+      if (stats.wealth >= 9) return { name: '富甲一方', desc: '财富自由的人生', emoji: '💰', rarity: 'rare' };
+      if (stats.appearance >= 9) return { name: '倾国倾城', desc: '美貌著称的人生', emoji: '😊', rarity: 'rare' };
+      if (age >= 80) return { name: '长命百岁', desc: '健康长寿的人生', emoji: '👴', rarity: 'rare' };
+      if (age < 20) return { name: '英年早逝', desc: '短暂但精彩的人生', emoji: '💔', rarity: 'rare' };
+      if (age >= 60) return { name: '平凡人生', desc: '大多数人的人生', emoji: '🏠', rarity: 'common' };
+      if (age >= 30) return { name: '人生苦短', desc: '短暂的一生', emoji: '⏰', rarity: 'common' };
+      return { name: '匆匆过客', desc: '来去匆匆', emoji: '🍂', rarity: 'common' };
+    }
+
+    // ========== 成就系统 ==========
+    
+    function checkAchievements() {
+      const unlocked = [];
+      const savedAchievements = JSON.parse(localStorage.getItem('lifeRestart_achievements') || '[]');
+      
+      ACHIEVEMENTS.forEach(achievement => {
+        if (savedAchievements.includes(achievement.id)) return;
+        
+        let achieved = false;
+        
+        switch (achievement.condition.type) {
+          case 'first_game': achieved = true; break;
+          case 'age':
+            achieved = achievement.condition.compare === '>=' 
+              ? gameState.age >= achievement.condition.value 
+              : gameState.age < achievement.condition.value;
+            break;
+          case 'stat':
+            achieved = gameState.stats[achievement.condition.stat] >= achievement.condition.value;
+            break;
+          case 'all_stats':
+            achieved = achievement.condition.compare === '<'
+              ? Object.values(gameState.stats).every(v => v < achievement.condition.value)
+              : Object.values(gameState.stats).every(v => v >= achievement.condition.value);
+            break;
+          case 'combo':
+            achieved = Object.entries(achievement.condition.stats).every(([k, v]) => gameState.stats[k] >= v);
+            if (achievement.condition.age) achieved = achieved && gameState.age < achievement.condition.age;
+            break;
+          case 'rise':
+            achieved = gameState.initialStats[achievement.condition.stat] <= achievement.condition.from &&
+                       gameState.stats[achievement.condition.stat] >= achievement.condition.to;
+            break;
+          case 'fall':
+            achieved = gameState.initialStats[achievement.condition.stat] >= achievement.condition.from &&
+                       gameState.stats[achievement.condition.stat] <= achievement.condition.to;
+            break;
+          case 'average':
+            achieved = Object.values(gameState.stats).every(v => v >= 4 && v <= 6);
+            break;
+          case 'games':
+            const games = parseInt(localStorage.getItem('lifeRestart_games') || '0') + 1;
+            achieved = games >= achievement.condition.value;
+            break;
+        }
+        
+        if (achieved) {
+          savedAchievements.push(achievement.id);
+          unlocked.push(achievement);
+        }
+      });
+      
+      localStorage.setItem('lifeRestart_achievements', JSON.stringify(savedAchievements));
+      
+      const games = parseInt(localStorage.getItem('lifeRestart_games') || '0') + 1;
+      localStorage.setItem('lifeRestart_games', games);
+      
+      unlocked.forEach(a => showAchievementToast(a));
+      return unlocked;
+    }
+
+    function showAchievementToast(achievement) {
+      const toast = document.getElementById('achievementToast');
+      document.getElementById('toastIcon').textContent = achievement.icon;
+      document.getElementById('toastTitle').textContent = achievement.name;
+      
+      toast.classList.remove('hidden');
+      toast.classList.add('achievement-popup');
+      
+      setTimeout(() => {
+        toast.classList.add('hidden');
+        toast.classList.remove('achievement-popup');
+      }, 2500);
+    }
+
+    function showAchievements() {
+      const savedAchievements = JSON.parse(localStorage.getItem('lifeRestart_achievements') || '[]');
+      
+      document.getElementById('achievementCount').textContent = savedAchievements.length;
+      document.getElementById('achievementTotal').textContent = ACHIEVEMENTS.length;
+      
+      const list = document.getElementById('achievementList');
+      list.innerHTML = ACHIEVEMENTS.map(a => {
+        const unlocked = savedAchievements.includes(a.id);
+        return `
+          <div class="card rounded-lg p-2.5 ${unlocked ? '' : 'opacity-40'}">
+            <div class="text-xl mb-1">${unlocked ? a.icon : '❓'}</div>
+            <p class="font-medium text-sm ${unlocked ? `rarity-${a.rarity}` : 'text-gray-500'}">${unlocked ? a.name : '???'}</p>
+            <p class="text-xs text-gray-400">${unlocked ? a.desc : '未解锁'}</p>
+          </div>
+        `;
+      }).join('');
+      
+      showScreen('achievementScreen');
+    }
+
+    // ========== 历史记录 ==========
+    
+    function saveHistory(ending) {
+      const history = JSON.parse(localStorage.getItem('lifeRestart_history') || '[]');
+      
+      history.unshift({
+        date: new Date().toLocaleString('zh-CN'),
+        age: gameState.age,
+        stats: { ...gameState.stats },
+        talents: gameState.talents.map(t => t.name),
+        ending: ending.name,
+        rarity: ending.rarity,
+      });
+      
+      if (history.length > 20) history.pop();
+      localStorage.setItem('lifeRestart_history', JSON.stringify(history));
+    }
+
+    function showHistory() {
+      const history = JSON.parse(localStorage.getItem('lifeRestart_history') || '[]');
+      const list = document.getElementById('historyList');
+      
+      if (history.length === 0) {
+        list.innerHTML = `
+          <div class="text-center text-gray-400 py-8">
+            <div class="text-3xl mb-2">📜</div>
+            <p>还没有人生记录</p>
+          </div>
+        `;
+      } else {
+        list.innerHTML = history.map(h => `
+          <div class="card rounded-lg p-3">
+            <div class="flex justify-between items-start mb-1.5">
+              <span class="text-xs text-gray-400">${h.date}</span>
+              <span class="font-medium text-sm rarity-${h.rarity}">${h.ending}</span>
+            </div>
+            <p class="text-sm">享年 <span class="text-yellow-400 font-bold">${h.age}</span> 岁</p>
+            <div class="grid grid-cols-4 gap-1 mt-1.5 text-xs text-center">
+              <div><span class="text-pink-400">${h.stats.appearance}</span> 颜</div>
+              <div><span class="text-blue-400">${h.stats.intelligence}</span> 智</div>
+              <div><span class="text-green-400">${h.stats.health}</span> 体</div>
+              <div><span class="text-yellow-400">${h.stats.wealth}</span> 家</div>
+            </div>
+          </div>
+        `).join('');
+      }
+      
+      showScreen('historyScreen');
+    }
+
+    function clearHistory() {
+      if (confirm('确定要清空所有人生记录吗？')) {
+        localStorage.removeItem('lifeRestart_history');
+        showHistory();
+      }
+    }
+
+    // ========== 其他功能 ==========
+    
+    function saveAndQuit() {
+      if (confirm('确定要退出吗？')) showScreen('startScreen');
+    }
+
+    function shareResult() {
+      const text = `【人生重开模拟器】\n我的人生结束了！\n享年 ${gameState.age} 岁\n颜值${gameState.stats.appearance} 智力${gameState.stats.intelligence} 体质${gameState.stats.health} 家境${gameState.stats.wealth}\n结局: 「${document.getElementById('endingName').textContent.replace(/[「」]/g, '')}」`;
+      
+      if (navigator.share) {
+        navigator.share({ title: '人生重开模拟器', text });
+      } else {
+        navigator.clipboard.writeText(text).then(() => alert('已复制到剪贴板！'));
+      }
+    }
+
+    function restartGame() {
+      startGame();
+    }
+
+    function showScreen(screenId) {
+      document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+      document.getElementById(screenId).classList.add('active');
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
